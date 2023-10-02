@@ -1,0 +1,221 @@
+devices:
+  adjust_period: 3
+  capture:
+    channels: 2
+    device: hw:CARD=Rx,DEV=0
+    format: S16LE
+    type: Alsa
+  capture_samplerate: 48000
+  chunksize: 1024
+  enable_rate_adjust: true
+  enable_resampling: true
+  playback:
+    channels: 4
+    device: hw:CARD=M4,DEV=0
+    format: S32LE
+    type: Alsa
+  queuelimit: 4
+  rate_measure_interval: 1
+  resampler_type: Synchronous
+  samplerate: 96000
+  silence_threshold: -85
+  silence_timeout: 10
+  stop_on_rate_change: false
+  target_level: 0
+filters:
+  Bassplus:
+    parameters:
+      bandwidth: 2
+      freq: 35
+      gain: 2
+      type: Peaking
+    type: Biquad
+  HiP:
+    parameters:
+      freq: 1400
+      q: 0.7
+      type: Highpass
+    type: Biquad
+  LoP:
+    parameters:
+      freq: 1400
+      q: 0.7
+      type: Lowpass
+    type: Biquad
+  Peak:
+    parameters:
+      freq: 120
+      gain: 0
+      q: 0.7
+      type: Peaking
+    type: Biquad
+  Shelf:
+    parameters:
+      freq: 200
+      gain: -2
+      slope: 4
+      type: Highshelf
+    type: Biquad
+  TimeAlign:
+    parameters:
+      delay: 0.16
+      subsample: false
+      unit: ms
+    type: Delay
+  Volume:
+    parameters:
+      ramp_time: 200
+    type: Volume
+mixers:
+  copy:
+    channels:
+      in: 2
+      out: 4
+    mapping:
+    - dest: 2
+      mute: false
+      sources:
+      - channel: 0
+        gain: -4
+        inverted: false
+        mute: false
+    - dest: 3
+      mute: false
+      sources:
+      - channel: 0
+        gain: -6
+        inverted: false
+        mute: false
+    - dest: 0
+      mute: false
+      sources:
+      - channel: 1
+        gain: -4
+        inverted: false
+        mute: false
+    - dest: 1
+      mute: false
+      sources:
+      - channel: 1
+        gain: -6
+        inverted: false
+        mute: false
+  swap:
+    channels:
+      in: 4
+      out: 4
+    mapping:
+    - dest: 3
+      mute: false
+      sources:
+      - channel: 3
+        gain: 0
+        inverted: false
+        mute: false
+    - dest: 2
+      mute: false
+      sources:
+      - channel: 2
+        gain: 0
+        inverted: true
+        mute: false
+    - dest: 1
+      mute: false
+      sources:
+      - channel: 1
+        gain: 0
+        inverted: false
+        mute: false
+    - dest: 0
+      mute: false
+      sources:
+      - channel: 0
+        gain: 0
+        inverted: false
+        mute: false
+pipeline:
+- name: copy
+  type: Mixer
+- channel: 0
+  names:
+  - LoP
+  type: Filter
+- channel: 2
+  names:
+  - LoP
+  type: Filter
+- channel: 1
+  names:
+  - HiP
+  type: Filter
+- channel: 3
+  names:
+  - HiP
+  type: Filter
+- channel: 0
+  names:
+  - LoP
+  type: Filter
+- channel: 0
+  names:
+  - Shelf
+  type: Filter
+- channel: 1
+  names:
+  - HiP
+  type: Filter
+- channel: 2
+  names:
+  - LoP
+  type: Filter
+- channel: 3
+  names:
+  - HiP
+  type: Filter
+- channel: 2
+  names:
+  - Shelf
+  type: Filter
+- channel: 1
+  names:
+  - TimeAlign
+  type: Filter
+- channel: 3
+  names:
+  - TimeAlign
+  type: Filter
+- channel: 1
+  names: []
+  type: Filter
+- channel: 2
+  names: []
+  type: Filter
+- channel: 0
+  names: []
+  type: Filter
+- channel: 0
+  names:
+  - Bassplus
+  type: Filter
+- channel: 2
+  names:
+  - Bassplus
+  type: Filter
+- name: swap
+  type: Mixer
+- channel: 0
+  names:
+  - Volume
+  type: Filter
+- channel: 1
+  names:
+  - Volume
+  type: Filter
+- channel: 2
+  names:
+  - Volume
+  type: Filter
+- channel: 3
+  names:
+  - Volume
+  type: Filter
