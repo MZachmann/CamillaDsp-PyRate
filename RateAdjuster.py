@@ -34,26 +34,39 @@ def NotIndex(l : list, x) :
 			return i-1
 	return n-1
 
-def IsValid(srclist : list, rate) :
+def ListFull(srclist : list, rate) :
 	''' look to see if the list is entirely 'rate'
 	if so, return True
 	if not, update the first not-rate value and return False
 	'''
 	l = srclist  # shrink
+	print('check list with' + str(rate))
 	if rate != 0:
-		j = NotIndex(l, rate)
-		if j == (len(l)-1):
+		j = 1 + NotIndex(l, rate)
+		if j == (len(l)):
 			return True
-		l[j+1] = rate # add it to the list
+		l[j] = rate # add it to the list
+		if(j==1):
+			for j in range(j+1, len(l)):
+				l[j] = 0
 	return False
+
+def IsWsConnected(ws : websocket):
+	bout = False
+	try:
+		ws.recv()
+		bout = ws.connected
+	except Exception as e:
+		print("connect error: " + str(e))
+	return bout
 
 def DoMain() :
 	''' Infinite loop of ask CamillaDsp what the capture rate is and
 	if it has changed then set a new configuration file
 	'''
+	currentrate = 0
 	while 1:
 		fndlist = [0,0,0] # lets ensure we get the same value 3 times
-		currentrate = 0
 		try:
 			ws = websocket.create_connection("ws://127.0.0.1:1234")
 			while 1:
@@ -62,31 +75,48 @@ def DoMain() :
 				u = ws.recv() # read the current state and check for Running
 				if not 'Running' in u :
 					fndlist = [0,0,0]
-					currentrate = 0
 					continue
-				#print("state={0}".format(json.loads(u)))
 				# get the (float) capture rate and see if it's one we expect
-				ws.send(json.dumps('GetCaptureRate'))
+				try:
+					ws.send(json.dumps('GetCaptureRate'))
+				except Exception as e:
+					print('Exception0 ' + str(e))
+					continue # ignore random fail?
 				rate = json.loads(ws.recv())
+				# print("rate={0}".format(rate))
 				nowrate = rate["GetCaptureRate"]["value"]
 				# which predefined rate is it?
 				found,newsample = ToRate(nowrate)
+
+				if (found == 0) :
+					found = -1
 				# print("Rate found={0} at {1}".format(found, newsample))
 				if (found != currentrate) :
-					isvalid = IsValid(fndlist, found)
-					if isvalid:
+					# print("found is {0} rate is {1}".format(found,currentrate))
+					listfull = ListFull(fndlist, found)
+					if listfull:
 							# print("Switching to " + newsample)
 							# do rate change
-							# if 'RUNNING'
-							jds = json.dumps({'SetConfigName': newsample})
-							print("Jds is : {0}".format(jds))
-							ws.send(jds)
-							print("reset name to:{0}".format(json.loads(ws.recv()))) # ignore this but get the data
-							ws.send(json.dumps('Reload'))
-							u = ws.recv() # ignore this but get the data
-							# print("reload={0}".format(json.loads(u)))
-							currentrate = found
-							fndlist = [0,0,0]
+							try:
+								# multiple failures, retry with 96K
+								if (found == -1) :
+									found,newsample = ToRate(96000)
+								# if 'RUNNING' read the yml file
+								with open(newsample) as f:
+									cfg = f.read()
+								# remove everything after the device settings
+								f = cfg.find('filter:') # remove excess stuff
+								if ( f>0) :
+									cfg = cfg[:f]
+								# send the device settings to CamillaDsp
+								ws.send(json.dumps({"SetConfig": cfg}))
+								# print("reset name to:{0}".format(newsample)) # status
+								ws = websocket.create_connection("ws://127.0.0.1:1234") # renew this?
+								currentrate = found
+								fndlist = [0,0,0]
+							except Exception as e:
+								print('Exception ' + str(e))
+								pass
 					else:
 						# ws.send(json.dumps("GetConfigName"))
 						# u = ws.recv() # for diagnostic here
@@ -97,7 +127,7 @@ def DoMain() :
 				else:
 					time.sleep(1) # the rate is still what it was, sleep a bit
 		except Exception as e:
-			print(str(e))
+			print('Exception2 ' + str(e))
 			time.sleep(0.1) # we can't go into a cpu-kill loop
 			pass
 
